@@ -39,6 +39,80 @@ chrome_options.add_argument("--proxy-server={0}".format(proxy.proxy))
 browser = webdriver.Chrome(chrome_options = chrome_options)
 ```
 
+a complete example (using the splunktransactions.py file
+
+```python
+from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import WebDriverException
+from msedge.selenium_tools import Edge, EdgeOptions
+from webdriver_manager.microsoft import EdgeChromiumDriverManager as ECDM
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
+import unittest
+from splunktransactions import Transaction
+from urllib.parse import urlparse
+from browsermobproxy import Server
+import subprocess
+
+URI = "https://httpstat.us/500"
+applicationName = (urlparse(URI)).netloc.replace(":", "-")
+responseTimeout = 5
+
+
+class WebsiteTest(unittest.TestCase):
+
+    def setUp(self):
+        self.pserver = Server(path='C:/Users/bdcoope2/Downloads/browsermob-proxy-2.1.4/bin/browsermob-proxy')
+        self.pserver.start()
+        self.proxy = self.pserver.create_proxy()
+        options = EdgeOptions()
+        options.use_chromium = True
+        options.add_argument('--ignore-ssl-errors=yes')
+        options.add_argument('--ignore-certificate-errors')
+        options.add_argument("--proxy-server={}".format(self.proxy.proxy))
+        # options.add_argument("headless")
+        # options.add_argument("InPrivate")
+        options.add_experimental_option("excludeSwitches", ["enable-logging"])
+        self.driver = Edge(ECDM().install(), options=options)
+        self.driver.implicitly_wait(30)
+        self.base_url = URI
+        self.driver.set_page_load_timeout(responseTimeout)
+        self.verificationErrors = []
+        self.accept_next_alert = True
+
+    def test(self):
+        driver = self.driver
+        a = Transaction(driver, applicationName)
+        self.proxy.new_har("main_request", options={})  # Optional:  options={'captureContent': True}
+        try:
+            print(a.TransactionStart(driver, 'initial'))
+            driver.get(self.base_url + "/")
+            WebDriverWait(driver, responseTimeout).until(EC.title_is("httpstat.us"))
+            print(a.TransactionEnd(driver, 'initial'))
+        except TimeoutException:
+            print(a.TransactionError(driver, 'initial', self.proxy))
+        except NoSuchElementException as ex:
+            print(ex)
+        except WebDriverException as ex:
+            print(ex)
+
+    def tearDown(self):
+        self.driver.close()
+        self.driver.quit()
+        self.pserver.stop()
+        self.assertEqual([], self.verificationErrors)
+        del self.driver
+
+
+if __name__ == "__main__":
+    unittest.main(warnings='ignore')
+```
+
+
 Running Tests
 -------------
 
